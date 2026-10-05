@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <title>FMS Inpatient Scheduler</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
 <style>
   :root {
     --gold: #d4a017;
@@ -62,16 +64,18 @@
   }
   td input[type=number] { width: 70px; }
   td.center { text-align: center; }
-  button.btn {
+  .btn {
     background: #1f6feb; color: #fff; border: none; padding: 7px 14px;
     border-radius: 4px; cursor: pointer; font-size: 13px;
+    display: inline-block; text-align: center; line-height: 1.2;
+    text-decoration: none; font-family: inherit;
   }
-  button.btn:hover { background: #1858c4; }
-  button.btn.ghost { background: #fff; color: #1f6feb; border: 1px solid #1f6feb; }
-  button.btn.ghost:hover { background: #e6eefc; }
-  button.btn.danger { background: #c0392b; }
-  button.btn.danger:hover { background: #9e2e22; }
-  button.btn.small { padding: 4px 8px; font-size: 12px; }
+  .btn:hover { background: #1858c4; }
+  .btn.ghost { background: #fff; color: #1f6feb; border: 1px solid #1f6feb; }
+  .btn.ghost:hover { background: #e6eefc; }
+  .btn.danger { background: #c0392b; color: #fff; border: none; }
+  .btn.danger:hover { background: #9e2e22; }
+  .btn.small { padding: 4px 8px; font-size: 12px; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
   .row > * { flex: 1 1 auto; }
   .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
@@ -109,9 +113,12 @@
     margin: 2px; font-size: 12px;
   }
   .req-list li button {
-    background: none; border: none; color: #888; cursor: pointer; font-size: 14px; padding: 0;
+    background: #c0392b; border: none; color: #fff; cursor: pointer;
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
+    margin-left: 4px; line-height: 1.3;
   }
-  .req-list li button:hover { color: var(--hard); }
+  .req-list li button:hover { background: #9e2e22; }
+  .req-list li button::before { content: 'Remove '; }
   .req-list li.hard { background: #fbe2df; color: var(--hard); }
   .req-list li.soft { background: #fcead5; color: var(--soft); }
   .req-list li.prefer { background: #d5f0dc; color: var(--ok); }
@@ -181,8 +188,31 @@
   }
   .pill-group button.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
   input[type=checkbox] { transform: scale(1.1); margin: 0 3px; }
+  /* PTO overview */
+  .pto-fac-block { border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
+  .pto-fac-block.empty { background: #fafafa; color: #888; }
+  .pto-fac-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; display: inline-block; min-width: 80px; }
+  .pto-chip { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; margin: 2px; }
+  .pto-chip.hard { background: #fbe2df; color: var(--hard); }
+  .pto-chip.soft { background: #fcead5; color: var(--soft); }
+  .pto-chip.prefer { background: #d5f0dc; color: var(--ok); }
+  .pto-week-box {
+    display: inline-block; padding: 6px 8px; border-radius: 4px; border: 1px solid #e0e0e0;
+    text-align: center; font-size: 11px; min-width: 54px;
+  }
+  .pto-week-box .wlbl { display: block; color: #666; font-size: 10px; }
+  .pto-week-box .wcount { display: block; font-size: 14px; font-weight: 600; }
+  .pto-week-box.lvl-0 { background: #fafafa; }
+  .pto-week-box.lvl-1 { background: #fff4e3; border-color: #f0d98a; }
+  .pto-week-box.lvl-2 { background: #fcead5; border-color: #e67e22; color:#7a4212; }
+  .pto-week-box.lvl-3 { background: #fbe2df; border-color: #c0392b; color:#7a2117; font-weight:600 }
+  /* Cloud */
+  #cloud-schedules-list table { font-size: 13px; }
+  #cloud-schedules-list .ver-row { background: #fafafa; }
+  #cloud-schedules-list .ver-row td { font-size: 12px; color:#555; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
   @media print {
-    header nav, .toolbar, button { display: none !important; }
+    header nav, .toolbar, button, #auth-bar { display: none !important; }
     main { max-width: 100%; padding: 0; }
     section.tab { display: block !important; page-break-after: always; }
   }
@@ -195,11 +225,26 @@
   <nav>
     <button data-tab="faculty" class="active">Faculty</button>
     <button data-tab="requests">Requests</button>
+    <button data-tab="pto">PTO Overview</button>
     <button data-tab="schedule">Schedule</button>
     <button data-tab="progress">Progress</button>
-    <button data-tab="data">Data</button>
+    <button data-tab="data">Data &amp; Cloud</button>
   </nav>
 </header>
+
+<!-- Password gate: covers the whole page until correct password is entered -->
+<div id="password-gate" style="display:none; position:fixed; inset:0; background:#222; z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; padding:28px 32px; border-radius:8px; max-width:380px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+    <h3 style="margin:0 0 6px">FMS Inpatient Scheduler</h3>
+    <p class="small" style="margin:0 0 16px; color:#555">Enter the app password to continue.</p>
+    <input type="password" id="pw-input" placeholder="Password" autofocus style="width:100%; padding:9px 11px; border:1px solid #ccc; border-radius:4px; font-size:14px; margin-bottom:8px">
+    <div id="pw-msg" class="small" style="min-height:18px; margin-bottom:8px; color:var(--hard)"></div>
+    <button class="btn" id="btn-pw-go" style="width:100%">Unlock</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" style="display:none; position:fixed; bottom:20px; right:20px; background:#222; color:#fff; padding:10px 14px; border-radius:4px; font-size:13px; z-index:200; max-width:340px; box-shadow:0 4px 16px rgba(0,0,0,0.25);"></div>
 
 <main>
 
@@ -257,6 +302,51 @@
   </div>
 </section>
 
+<!-- ================== PTO OVERVIEW TAB ================== -->
+<section id="tab-pto" class="tab">
+  <h2>PTO &amp; request overview</h2>
+  <p class="help">Everyone's requests at a glance. Use this to sanity-check that nothing was missed before you build the schedule, and to spot weeks where lots of faculty are off.</p>
+  <div class="toolbar">
+    <button class="btn ghost" id="btn-pto-print">Print this page</button>
+    <button class="btn ghost" id="btn-pto-export-csv">Export as CSV</button>
+    <span class="legend-row" style="margin-left:auto">
+      <span class="badge hard">hard</span> can't be on inpatient ·
+      <span class="badge soft">soft</span> prefer not (P1–P3) ·
+      <span class="badge" style="background:#d5f0dc; color:#1a4a26">want</span> prefer to work
+    </span>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Weeks with the most PTO</h3>
+    <p class="small">Weeks flagged by hard blocks. Use this to spot scheduling pressure points.</p>
+    <div id="pto-heatmap" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">By faculty</h3>
+    <div id="pto-by-faculty"></div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">By week</h3>
+    <p class="small">All requests for each week, side-by-side.</p>
+    <div style="overflow-x:auto">
+      <table id="pto-by-week-table">
+        <thead>
+          <tr>
+            <th>Block</th>
+            <th>Week of</th>
+            <th style="color:var(--hard)">Hard blocks</th>
+            <th style="color:var(--soft)">Soft avoids</th>
+            <th style="color:var(--ok)">Prefer-to-work</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 <!-- ================== SCHEDULE TAB ================== -->
 <section id="tab-schedule" class="tab">
   <h2>Schedule — <span id="period-label"></span></h2>
@@ -268,11 +358,11 @@
     <button class="btn danger" id="btn-clear-schedule">Clear schedule</button>
     <span class="small" style="margin-left:auto">★ = includes holiday · red outline = hard violation · orange = soft violation</span>
   </div>
-  <p class="small">Auto-fill fills empty cells with a greedy best-fit that honors all hard rules (eligibility, hard blocks, back-to-back, OB+Bronze, solo weekends) and scores soft preferences. Hand-edit any cell afterward — violations will flag live. Run it more than once to try different fills; clear first to start over.</p>
+  <p class="small">Auto-fill fills empty cells with a greedy best-fit that honors all hard rules (eligibility, hard blocks, 2-week inpatient gap preferred, OB+Bronze, solo weekends) and scores soft preferences. Hand-edit any cell afterward — violations will flag live. Run it more than once to try different fills; clear first to start over.</p>
   <div id="forced-conflicts-panel"></div>
   <div class="legend-row">
     <b>Flags legend:</b>
-    <span class="flag-pill hard">!</span> hard-rule violation (eligibility, hard-blocked PTO, back-to-back, etc.) ·
+    <span class="flag-pill hard">!</span> hard-rule violation (eligibility, hard-blocked PTO, back-to-back inpatient, etc.) ·
     <span class="flag-pill soft">~</span> soft preference flag (soft-avoid, cadence) ·
     <span class="flag-pill soft">wknd ★</span> weekend includes a holiday. Hover any pill for details.
   </div>
@@ -283,7 +373,7 @@
       <li><b>Gold weekend is always the same person as Gold week</b> (no separate Gold weekend assignment).</li>
       <li><b>OB and Bronze weekends prefer the same person who's on that service that week</b> — only fall back to someone else if there's a hard-block weekend, weekend combo-rule violation, or the global OB+Bronze weekend exclusion.</li>
       <li>Hard-block week/weekend requests are violations if assigned.</li>
-      <li>No back-to-back inpatient weeks.</li>
+      <li>Prefer at least 2 weeks off inpatient (Gold, Bronze, OB — week or weekend) between any two inpatient assignments (every-3-weeks cadence). Auto-fill tries this first, then falls back to "no back-to-back", then fills anyway. 1-week gaps show as orange (soft) flags; back-to-back shows as red (hard) flags. <b>Exception:</b> GJE routinely works every 2 weeks (1 week off between) — not flagged for him.</li>
       <li>Same person cannot do two services in the same week.</li>
       <li>OB and Bronze cannot be covered by one person on the same weekend.</li>
       <li>Faculty weekend-combo rule must be honored (e.g., "solo only" can't cover two services on one weekend).</li>
@@ -366,6 +456,25 @@
     </div>
     <p class="small">CSV opens cleanly in Excel. The .xlsx export requires internet the first time to load a small library; after that it works offline.</p>
   </div>
+  <!-- ============ CLOUD SAVE / LOAD (Supabase) ============ -->
+  <div class="panel" id="cloud-panel">
+    <h3 style="margin-top:0">Cloud — save &amp; load (Supabase)</h3>
+    <div id="cloud-setup-hint" class="small" style="display:none; background:#fff8e1; border:1px solid #f0d98a; padding:10px; border-radius:4px; margin-bottom:10px;">
+      Cloud save/load isn't configured yet. Open <code>SUPABASE_SETUP.md</code> in this folder for a step-by-step guide.
+    </div>
+    <div id="cloud-auth" style="display:none">
+      <div class="toolbar" style="margin-bottom:8px">
+        <span class="small" id="cloud-current-label" style="color:#555"></span>
+        <button class="btn" id="btn-cloud-save-new">Save current as new schedule…</button>
+        <button class="btn ghost" id="btn-cloud-save-version" disabled>Save as new version</button>
+        <button class="btn ghost" id="btn-cloud-refresh" title="Refresh list">↻ Refresh</button>
+      </div>
+      <div id="cloud-schedules-list">
+        <p class="small">Loading…</p>
+      </div>
+    </div>
+  </div>
+
   <div class="panel">
     <h3 style="margin-top:0">Reset</h3>
     <div class="toolbar">
@@ -400,7 +509,6 @@ const SEED_FACULTY = [
   // weekendRule options: 'solo' (default) or 'goldObOk'
   { initials:'AFM', services:{gold:true,bronze:true,ob:false}, goals:{gold:2.9,obWeek:0,obWeekend:0,bronze:2,bronzeWeekend:2}, weekendRule:'solo', notes:'' },
   { initials:'AMP', services:{gold:true,bronze:true,ob:true}, goals:{gold:2.9,obWeek:3,obWeekend:4,bronze:2,bronzeWeekend:2}, weekendRule:'goldObOk', notes:'' },
-  { initials:'BSC', services:{gold:false,bronze:true,ob:false}, goals:{gold:0,obWeek:0,obWeekend:0,bronze:3,bronzeWeekend:3}, weekendRule:'solo', notes:'' },
   { initials:'CDO', services:{gold:true,bronze:true,ob:false}, goals:{gold:2,obWeek:0,obWeekend:0,bronze:1,bronzeWeekend:2}, weekendRule:'solo', notes:'' },
   { initials:'GJE', services:{gold:false,bronze:true,ob:false}, goals:{gold:0,obWeek:0,obWeekend:0,bronze:13,bronzeWeekend:6}, weekendRule:'solo', notes:'' },
   { initials:'JDH', services:{gold:true,bronze:true,ob:true}, goals:{gold:2.9,obWeek:1,obWeekend:1,bronze:1,bronzeWeekend:2}, weekendRule:'goldObOk', notes:'' },
@@ -418,7 +526,7 @@ const SEED_FACULTY = [
 
 const SEED_REQUESTS = {};
 
-const DEFAULT_PERIOD = { startDate: '2026-07-06', weeks: 26 };
+const DEFAULT_PERIOD = { startDate: '2026-06-29', weeks: 52 };
 
 // US holidays falling in Jul-Dec 2026 + Jan 1 2027. For "don't repeat holiday" rule.
 // Dates are Saturdays (for weekends) and Mondays (for weeks). We also mark any week
@@ -694,35 +802,51 @@ function forcedConflicts(weeks) {
 }
 
 function crossWeekFlags(weeks) {
-  // Return map of iso -> extra soft/hard notes based on adjacent weeks
+  // Return map of iso -> extra soft/hard notes based on adjacent weeks.
+  // Ideal rule: at least 2 weeks off inpatient between any two inpatient
+  // assignments (every-3-weeks cadence). So if someone is on inpatient in week N,
+  // the earliest they should return is week N+3.
+  // Exception: GJE (Eichman) works every 2 weeks (1 week off between) — no flag for him.
+  // Severity for everyone else:
+  //   back = 1  (0 weeks between)       → HARD violation (back-to-back)
+  //   back = 2  (1 week between)        → SOFT flag (acceptable fallback)
+  //   back >= 3 (2+ weeks between)      → no flag (ideal)
+  const EVERY_2_WEEKS_OK = new Set(['GJE']);
+  const peopleAt = w => {
+    const e = state.schedule[w.iso];
+    if (!e) return [];
+    return [...Object.values(e.week), ...Object.values(e.weekend)].filter(Boolean);
+  };
   const extras = {};
   for (let i = 0; i < weeks.length; i++) {
     const w = weeks[i];
-    const prev = weeks[i-1];
-    if (!prev) continue;
     const entry = state.schedule[w.iso];
-    const prevEntry = state.schedule[prev.iso];
-    if (!entry || !prevEntry) continue;
+    if (!entry) continue;
+    const thisPeople = new Set(peopleAt(w));
+    if (!thisPeople.size) continue;
 
-    // Back-to-back inpatient (same person on any service this week and last week)
-    const thisWk = Object.values(entry.week).filter(Boolean);
-    const prevWk = Object.values(prevEntry.week).filter(Boolean);
-    for (const p of prevWk) {
-      if (thisWk.includes(p)) {
-        (extras[w.iso] = extras[w.iso] || {hard:[], soft:[]}).hard.push(
-          `${p}: back-to-back inpatient (prev week)`
-        );
+    for (let back = 1; back <= 2; back++) {
+      const prev = weeks[i-back];
+      if (!prev) continue;
+      const prevPeople = new Set(peopleAt(prev));
+      for (const p of prevPeople) {
+        if (!thisPeople.has(p)) continue;
+        if (EVERY_2_WEEKS_OK.has(p)) continue; // GJE exception — no flag
+        const gapWeeks = back - 1;
+        const bucket = (extras[w.iso] = extras[w.iso] || {hard:[], soft:[]});
+        if (back === 1) {
+          bucket.hard.push(`${p}: back-to-back inpatient (needs 2 weeks off, 0 between)`);
+        } else {
+          bucket.soft.push(`${p}: only 1 week between inpatient assignments (2 preferred)`);
+        }
       }
     }
-    // Post-Gold: whoever did Gold last week should not do any inpatient this week (hard per rules)
-    if (prevEntry.week.gold) {
-      const g = prevEntry.week.gold;
-      if (thisWk.includes(g)) {
-        // already flagged as back-to-back, upgrade note
-        (extras[w.iso] = extras[w.iso] || {hard:[], soft:[]}).hard.push(
-          `${g}: post-Gold back-to-back (strongly discouraged)`
-        );
-      }
+    // Post-Gold: additional emphasis if last week's Gold is on inpatient this week
+    const prevEntry = i > 0 ? state.schedule[weeks[i-1].iso] : null;
+    if (prevEntry && prevEntry.week.gold && thisPeople.has(prevEntry.week.gold) && !EVERY_2_WEEKS_OK.has(prevEntry.week.gold)) {
+      (extras[w.iso] = extras[w.iso] || {hard:[], soft:[]}).hard.push(
+        `${prevEntry.week.gold}: post-Gold back-to-back (strongly discouraged)`
+      );
     }
   }
 
@@ -787,8 +911,10 @@ function activateTab(name) {
   $$('header nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   if (name === 'faculty') renderFaculty();
   if (name === 'requests') renderRequestsTab();
+  if (name === 'pto') renderPTOOverview();
   if (name === 'schedule') renderSchedule();
   if (name === 'progress') renderProgress();
+  if (name === 'data') { if (typeof renderCloudPanel === 'function') renderCloudPanel(); }
 }
 
 /* ---------- Rendering: Faculty tab ---------- */
@@ -1215,8 +1341,9 @@ function autoFillSchedule(options = {}) {
 
   let assigned = 0, skipped = 0;
 
-  function tryFill(allowOverGoal, overflowMode, svcFilter) {
+  function tryFill(allowOverGoal, overflowMode, svcFilter, minGap = 2) {
     // svcFilter: optional — restrict filling to these services only (e.g., ['ob'])
+    // minGap: 2 (ideal) | 1 (relaxed, no back-to-back) | 0 (no gap restriction, last-resort)
     for (let wi = 0; wi < weeks.length; wi++) {
       const w = weeks[wi];
       const entry = state.schedule[w.iso];
@@ -1224,7 +1351,7 @@ function autoFillSchedule(options = {}) {
       for (const svc of ['gold','ob','bronze']) {
         if (svcFilter && !svcFilter.includes(svc)) continue;
         if (entry.week[svc]) continue;
-        const pick = pickBestFaculty(svc, w, wi, 'week', entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode);
+        const pick = pickBestFaculty(svc, w, wi, 'week', entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode, minGap);
         if (pick) { entry.week[svc] = pick; lastWeekIdx[pick] = wi; assigned++; }
       }
       // Gold weekend ALWAYS = Gold week (rule: Gold weekends pair with Gold weeks)
@@ -1242,7 +1369,7 @@ function autoFillSchedule(options = {}) {
           assigned++;
           continue;
         }
-        const pick = pickBestFaculty(svc, w, wi, 'weekend', entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode);
+        const pick = pickBestFaculty(svc, w, wi, 'weekend', entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode, minGap);
         if (pick) {
           entry.weekend[svc] = pick;
           if (weekHolidays(w).length > 0 || weekendHasHoliday(w)) {
@@ -1254,12 +1381,17 @@ function autoFillSchedule(options = {}) {
     }
   }
 
-  // Pass 1: strict (under goal only)
-  tryFill(false);
-  // Pass 2: OB overflow — only faculty marked opOBPref may exceed goal for OB
-  tryFill(true, 'opOBOnly', ['ob']);
-  // Pass 3: allow going over goal to fill remaining cells (all services, anyone)
-  tryFill(true, 'any');
+  // Pass 1: strict (under goal, ideal 2-week gap / 1 for GJE)
+  tryFill(false, undefined, undefined, 2);
+  // Pass 2: strict + relaxed (under goal, only prevent back-to-back; GJE no restriction)
+  tryFill(false, undefined, undefined, 1);
+  // Pass 3: OB overflow — opOBPref only, no back-to-back
+  tryFill(true, 'opOBOnly', ['ob'], 1);
+  // Pass 4: allow over goal, no back-to-back
+  tryFill(true, 'any', undefined, 1);
+  // Pass 5: last resort — no gap restriction. Fills anything still empty.
+  // Violations will show as red flags on the schedule so you can see where.
+  tryFill(true, 'any', undefined, 0);
 
   // Count remaining empty
   for (const w of weeks) {
@@ -1276,10 +1408,13 @@ function autoFillSchedule(options = {}) {
   return { assigned, skipped };
 }
 
-function pickBestFaculty(svc, w, wi, kind, entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode) {
+function pickBestFaculty(svc, w, wi, kind, entry, weeks, lastWeekIdx, holidayHits, allowOverGoal, overflowMode, minGap = 2) {
   // overflowMode (optional):
   //   undefined/'any' — default; anyone may go over goal when allowOverGoal is true
   //   'opOBOnly'       — only faculty with opOBPref=true may be picked over goal (used for OB overflow pass)
+  // minGap: how many weeks off before this person can be picked again for inpatient.
+  //   2 = ideal (every-3-weeks cadence), 1 = fallback (no back-to-back), 0 = no restriction.
+  //   GJE is exempt (effective gap = minGap - 1).
   const eligible = state.faculty.filter(f => f.services[svc]);
   const weekIso = w.iso;
   const satIso = fmtISO(w.sat);
@@ -1323,15 +1458,29 @@ function pickBestFaculty(svc, w, wi, kind, entry, weeks, lastWeekIdx, holidayHit
       }
     }
 
-    // Hard: back-to-back after Gold (strong); back-to-back anywhere (hard per rules)
+    // Gap rule: prefer 2 weeks off between inpatient assignments (week OR weekend).
+    // GJE is exempt — he routinely works every 2 weeks (1 week off between), so
+    // his effective gap is minGap - 1 (floor 0).
+    // `minGap` controls how strict this pass is:
+    //   2 → ideal (skip anyone on inpatient in past 2 weeks; GJE skips past 1)
+    //   1 → relaxed fallback (skip only back-to-back; GJE no restriction)
+    //   0 → no gap restriction (last-resort fill; will flag on the schedule)
     let btbPenalty = 0;
-    if (kind === 'week' && wi > 0) {
-      const prevEntry = state.schedule[weeks[wi-1].iso];
-      const prevPeople = Object.values(prevEntry.week).filter(Boolean);
-      if (prevPeople.includes(f.initials)) {
-        // Ideal no back-to-back; make this a hard skip
-        continue;
+    const effMinGap = (f.initials === 'GJE') ? Math.max(0, minGap - 1) : minGap;
+    if (effMinGap > 0) {
+      let tooRecent = false;
+      for (let back = 1; back <= effMinGap; back++) {
+        const prev = weeks[wi - back];
+        if (!prev) continue;
+        const prevEntry = state.schedule[prev.iso];
+        if (!prevEntry) continue;
+        const prevPeople = [
+          ...Object.values(prevEntry.week),
+          ...Object.values(prevEntry.weekend),
+        ].filter(Boolean);
+        if (prevPeople.includes(f.initials)) { tooRecent = true; break; }
       }
+      if (tooRecent) continue;
     }
 
     // Soft: 2 in same block
@@ -1757,6 +1906,410 @@ function buildStyledXlsx() {
   XLSX.writeFile(wb, `FMS_schedule_${state.period.startDate}.xlsx`);
 }
 
+/* ========================================================================
+   CONFIG — edit these three values once, then the app "just works."
+
+   1. APP_PASSWORD: the password the app will ask for on load. Change this.
+   2. SUPABASE_URL and SUPABASE_ANON_KEY: grab these from Supabase
+      (see SUPABASE_SETUP.md step 4). Until you paste them in, cloud
+      save/load stays hidden but the rest of the app still works offline.
+   ======================================================================== */
+const APP_PASSWORD = 'Wehavethebestresidents!';
+const SUPABASE_URL = 'https://qewochikmwvelbgvyxhd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFld29jaGlrbXd2ZWxiZ3Z5eGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NjYyNDQsImV4cCI6MjA5MjQ0MjI0NH0.pKZ0zlamOzgMFa1ilHB98Llmc7cNQ-iPG3TSeGpTjSs';
+
+let supa = null;
+// When you load a cloud schedule, we remember its id so "Save as new version" knows which schedule to append to.
+let currentCloudScheduleId = null;
+let currentCloudScheduleName = null;
+
+function supaConfigured() {
+  return SUPABASE_URL && SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR-PROJECT-ID')
+      && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('YOUR-ANON-KEY');
+}
+
+function initSupabase() {
+  if (!supaConfigured()) {
+    const hint = $('#cloud-setup-hint'); if (hint) hint.style.display = 'block';
+    return;
+  }
+  if (!window.supabase) {
+    console.warn('Supabase library not loaded');
+    return;
+  }
+  supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
+  // Show the cloud panel now that we have a client
+  const cloudAuth = $('#cloud-auth'); if (cloudAuth) cloudAuth.style.display = '';
+}
+
+/* ---------- Password gate ---------- */
+const PW_SESSION_KEY = 'fms-pw-unlocked-v1';
+
+function showPasswordGate() {
+  const gate = $('#password-gate');
+  gate.style.display = 'flex';
+  const input = $('#pw-input');
+  input.value = '';
+  setTimeout(() => input.focus(), 30);
+}
+
+function hidePasswordGate() {
+  $('#password-gate').style.display = 'none';
+}
+
+function tryPassword() {
+  const input = $('#pw-input');
+  const msg = $('#pw-msg');
+  if (input.value === APP_PASSWORD) {
+    try { sessionStorage.setItem(PW_SESSION_KEY, '1'); } catch(e) {}
+    hidePasswordGate();
+    msg.textContent = '';
+  } else {
+    msg.textContent = 'Incorrect password.';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function isUnlocked() {
+  try { return sessionStorage.getItem(PW_SESSION_KEY) === '1'; } catch(e) { return false; }
+}
+
+function toast(msg, kind) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.style.background = kind === 'error' ? '#c0392b' : kind === 'ok' ? '#1a7a3a' : '#222';
+  el.style.display = 'block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3600);
+}
+
+/* ---------- Cloud save/load ---------- */
+async function listCloudSchedules() {
+  const { data, error } = await supa.from('schedules')
+    .select('*, schedule_versions(id, version_num, note, created_at)')
+    .eq('archived', false)
+    .order('updated_at', {ascending: false});
+  if (error) throw error;
+  // Sort versions desc within each schedule
+  (data || []).forEach(s => {
+    if (s.schedule_versions) s.schedule_versions.sort((a,b)=>b.version_num-a.version_num);
+  });
+  return data || [];
+}
+
+async function loadScheduleVersion(versionId, scheduleId, scheduleName) {
+  const { data, error } = await supa.from('schedule_versions')
+    .select('state')
+    .eq('id', versionId)
+    .single();
+  if (error) throw error;
+  if (!data || !data.state) throw new Error('No state in that version');
+  state = data.state;
+  migrateState();
+  saveLocal();
+  currentCloudScheduleId = scheduleId;
+  currentCloudScheduleName = scheduleName;
+  // Re-render everything
+  renderFaculty(); renderRequestsTab(); renderSchedule(); renderProgress(); renderPTOOverview();
+  renderCloudPanel();
+  toast(`Loaded "${scheduleName}"`, 'ok');
+}
+
+async function saveAsNewSchedule() {
+  const name = prompt('Name this schedule (e.g., "Jul-Dec 2026 draft"):', currentCloudScheduleName || '');
+  if (!name) return;
+  try {
+    const { data: sched, error: e1 } = await supa.from('schedules').insert({
+      name
+    }).select().single();
+    if (e1) throw e1;
+    const { error: e2 } = await supa.from('schedule_versions').insert({
+      schedule_id: sched.id,
+      version_num: 1,
+      state,
+      note: 'Initial version',
+    });
+    if (e2) throw e2;
+    currentCloudScheduleId = sched.id;
+    currentCloudScheduleName = sched.name;
+    toast(`Saved "${name}" (v1)`, 'ok');
+    renderCloudPanel();
+  } catch (e) {
+    if ((e.message||'').includes('duplicate key')) toast('A schedule with that name already exists.', 'error');
+    else toast('Save failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function saveNewVersion() {
+  if (!currentCloudScheduleId) {
+    toast('No cloud schedule loaded. Click "Save current as new schedule" first.', 'error');
+    return;
+  }
+  const note = prompt('Optional note for this version (e.g., "After Mark\'s PTO update"):', '') ?? null;
+  try {
+    // Find next version number
+    const { data: latest, error: e1 } = await supa.from('schedule_versions')
+      .select('version_num').eq('schedule_id', currentCloudScheduleId)
+      .order('version_num', {ascending:false}).limit(1);
+    if (e1) throw e1;
+    const nextNum = (latest && latest[0]) ? latest[0].version_num + 1 : 1;
+    const { error: e2 } = await supa.from('schedule_versions').insert({
+      schedule_id: currentCloudScheduleId,
+      version_num: nextNum,
+      state,
+      note: note || null,
+    });
+    if (e2) throw e2;
+    // Touch schedules.updated_at
+    await supa.from('schedules').update({ name: currentCloudScheduleName }).eq('id', currentCloudScheduleId);
+    toast(`Saved v${nextNum} of "${currentCloudScheduleName}"`, 'ok');
+    renderCloudPanel();
+  } catch (e) {
+    toast('Save failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function renameCloudSchedule(id, oldName) {
+  const name = prompt('New name:', oldName);
+  if (!name || name === oldName) return;
+  try {
+    const { error } = await supa.from('schedules').update({name}).eq('id', id);
+    if (error) throw error;
+    if (currentCloudScheduleId === id) currentCloudScheduleName = name;
+    toast('Renamed.', 'ok');
+    renderCloudPanel();
+  } catch (e) {
+    toast('Rename failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function deleteCloudSchedule(id, name) {
+  if (!confirm(`Delete schedule "${name}" and ALL its versions? This cannot be undone.`)) return;
+  try {
+    const { error } = await supa.from('schedules').delete().eq('id', id);
+    if (error) throw error;
+    if (currentCloudScheduleId === id) { currentCloudScheduleId = null; currentCloudScheduleName = null; }
+    toast('Deleted.', 'ok');
+    renderCloudPanel();
+  } catch (e) {
+    toast('Delete failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function deleteCloudVersion(versionId, scheduleName, versionNum) {
+  if (!confirm(`Delete version ${versionNum} of "${scheduleName}"?`)) return;
+  try {
+    const { error } = await supa.from('schedule_versions').delete().eq('id', versionId);
+    if (error) throw error;
+    toast('Version deleted.', 'ok');
+    renderCloudPanel();
+  } catch (e) {
+    toast('Delete failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function renderCloudPanel() {
+  if (!supaConfigured()) return;
+  const cloudAuth = $('#cloud-auth'); if (cloudAuth) cloudAuth.style.display = '';
+  // current-loaded label
+  const lbl = $('#cloud-current-label');
+  const saveVerBtn = $('#btn-cloud-save-version');
+  if (currentCloudScheduleId && currentCloudScheduleName) {
+    lbl.innerHTML = `Currently loaded: <b>${escapeHtml(currentCloudScheduleName)}</b>`;
+    if (saveVerBtn) saveVerBtn.disabled = false;
+  } else {
+    lbl.textContent = 'No cloud schedule loaded — your work is in-browser only.';
+    if (saveVerBtn) saveVerBtn.disabled = true;
+  }
+  const listEl = $('#cloud-schedules-list');
+  listEl.innerHTML = '<p class="small">Loading…</p>';
+  try {
+    const scheds = await listCloudSchedules();
+    if (!scheds.length) {
+      listEl.innerHTML = '<p class="small">No cloud schedules yet. Click <b>Save current as new schedule</b> above to create your first one.</p>';
+      return;
+    }
+    const rows = scheds.map(s => {
+      const vers = s.schedule_versions || [];
+      const latest = vers[0];
+      const isCurrent = (s.id === currentCloudScheduleId);
+      const verRows = vers.map(v => `
+        <tr class="ver-row">
+          <td style="padding-left:28px">v${v.version_num}${v.note ? ' — ' + escapeHtml(v.note) : ''}</td>
+          <td>${new Date(v.created_at).toLocaleString()}</td>
+          <td class="row-actions">
+            <button class="btn small ghost" data-act="load-ver" data-vid="${v.id}" data-sid="${s.id}" data-sname="${escapeHtml(s.name)}">Load</button>
+            <button class="btn small danger" data-act="del-ver" data-vid="${v.id}" data-sname="${escapeHtml(s.name)}" data-vnum="${v.version_num}">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+      return `
+        <tr${isCurrent ? ' style="background:#e6eefc"' : ''}>
+          <td><b>${escapeHtml(s.name)}</b>${isCurrent ? ' <span class="small" style="color:#1f6feb">(loaded)</span>' : ''}</td>
+          <td>${vers.length} version${vers.length===1?'':'s'}</td>
+          <td>${latest ? new Date(latest.created_at).toLocaleDateString() : '—'}</td>
+          <td class="row-actions">
+            <button class="btn small" data-act="load-latest" data-sid="${s.id}" data-sname="${escapeHtml(s.name)}" ${latest?'':'disabled'}>Load latest</button>
+            <button class="btn small ghost" data-act="toggle-versions" data-sid="${s.id}">Versions</button>
+            <button class="btn small ghost" data-act="rename" data-sid="${s.id}" data-sname="${escapeHtml(s.name)}">Rename</button>
+            <button class="btn small danger" data-act="delete" data-sid="${s.id}" data-sname="${escapeHtml(s.name)}">Delete</button>
+          </td>
+        </tr>
+        <tbody id="vers-${s.id}" style="display:none">
+          ${verRows || '<tr class="ver-row"><td colspan="3" style="padding-left:28px" class="small">No versions yet.</td></tr>'}
+        </tbody>
+      `;
+    }).join('');
+    listEl.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Versions</th>
+            <th>Last saved</th>
+            <th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    // Wire up actions (event delegation)
+    listEl.querySelectorAll('button[data-act]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const act = btn.dataset.act;
+        if (act === 'load-latest') {
+          // Find the latest version id for this schedule
+          const sched = scheds.find(s => s.id === btn.dataset.sid);
+          if (!sched || !sched.schedule_versions.length) return;
+          const latestV = sched.schedule_versions[0];
+          if (!confirm(`Load "${btn.dataset.sname}" (v${latestV.version_num})? This replaces your current in-browser work.`)) return;
+          await loadScheduleVersion(latestV.id, btn.dataset.sid, btn.dataset.sname);
+        } else if (act === 'load-ver') {
+          if (!confirm('Load this version? Replaces your current in-browser work.')) return;
+          await loadScheduleVersion(btn.dataset.vid, btn.dataset.sid, btn.dataset.sname);
+        } else if (act === 'toggle-versions') {
+          const el = $('#vers-' + btn.dataset.sid);
+          if (el) el.style.display = (el.style.display === 'none') ? '' : 'none';
+        } else if (act === 'rename') {
+          await renameCloudSchedule(btn.dataset.sid, btn.dataset.sname);
+        } else if (act === 'delete') {
+          await deleteCloudSchedule(btn.dataset.sid, btn.dataset.sname);
+        } else if (act === 'del-ver') {
+          await deleteCloudVersion(btn.dataset.vid, btn.dataset.sname, btn.dataset.vnum);
+        }
+      });
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p class="small" style="color:var(--hard)">Failed to load schedules: ${escapeHtml(e.message||String(e))}</p>`;
+  }
+}
+
+/* ---------- PTO Overview tab ---------- */
+function renderPTOOverview() {
+  const weeks = weeksInPeriod();
+
+  // --- heatmap: week boxes showing hard-block counts ---
+  const heatmap = $('#pto-heatmap');
+  if (heatmap) {
+    heatmap.innerHTML = weeks.map(w => {
+      const items = requestsForWeek(w);
+      const hardCount = items.filter(i => i.kind === 'hard').length;
+      const softCount = items.filter(i => i.kind === 'soft').length;
+      const preferCount = items.filter(i => i.kind === 'prefer').length;
+      let lvl = 0;
+      if (hardCount >= 4) lvl = 3;
+      else if (hardCount >= 2) lvl = 2;
+      else if (hardCount >= 1) lvl = 1;
+      const title = `Week of ${fmtLong(w.mon)} (Block ${w.block})\n`
+        + (hardCount ? `${hardCount} hard block${hardCount===1?'':'s'}\n` : '')
+        + (softCount ? `${softCount} soft avoid${softCount===1?'':'s'}\n` : '')
+        + (preferCount ? `${preferCount} prefer-to-work\n` : '')
+        + (!items.length ? 'No requests' : '');
+      return `<div class="pto-week-box lvl-${lvl}" title="${escapeHtml(title)}">
+        <span class="wlbl">Blk ${w.block}</span>
+        <span class="wlbl">${fmtShort(w.mon)}</span>
+        <span class="wcount">${hardCount || '·'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // --- by faculty ---
+  const byFac = $('#pto-by-faculty');
+  if (byFac) {
+    const rows = state.faculty.map(f => {
+      const r = state.requests[f.initials] || { hardBlockWeeks:[], hardBlockWeekends:[], softAvoidWeeks:[], preferWeeks:[] };
+      const hardW = (r.hardBlockWeeks || []).slice().sort();
+      const hardWE = (r.hardBlockWeekends || []).slice().sort();
+      const softW = (r.softAvoidWeeks || []).slice().sort((a,b)=>a.week.localeCompare(b.week));
+      const prefW = (r.preferWeeks || []).slice().sort();
+      const total = hardW.length + hardWE.length + softW.length + prefW.length;
+      const fmtWk = iso => {
+        const w = weeks.find(x => x.iso === iso);
+        return w ? fmtShort(w.mon) : iso;
+      };
+      const fmtWE = iso => {
+        const w = weeks.find(x => fmtISO(x.sat) === iso);
+        return w ? fmtShort(w.sat) + ' wknd' : iso;
+      };
+      if (total === 0) {
+        return `<div class="pto-fac-block empty"><span class="pto-fac-name">${escapeHtml(f.initials)}</span> <span class="small">no requests</span></div>`;
+      }
+      const chips = [
+        ...hardW.map(iso => `<span class="pto-chip hard">off week of ${fmtWk(iso)}</span>`),
+        ...hardWE.map(iso => `<span class="pto-chip hard">off ${fmtWE(iso)}</span>`),
+        ...softW.map(x => `<span class="pto-chip soft">avoid ${fmtWk(x.week)} (P${x.priority})</span>`),
+        ...prefW.map(iso => `<span class="pto-chip prefer">wants ${fmtWk(iso)}</span>`),
+      ].join('');
+      return `<div class="pto-fac-block">
+        <span class="pto-fac-name">${escapeHtml(f.initials)}</span> ${chips}
+      </div>`;
+    }).join('');
+    byFac.innerHTML = rows || '<p class="small">No faculty yet.</p>';
+  }
+
+  // --- by week ---
+  const tbody = $('#pto-by-week-table tbody');
+  if (tbody) {
+    tbody.innerHTML = weeks.map(w => {
+      const items = requestsForWeek(w);
+      const hard = items.filter(i => i.kind === 'hard').map(i => `<span class="pto-chip hard">${escapeHtml(i.text)}</span>`).join('') || '<span class="small" style="color:#aaa">—</span>';
+      const soft = items.filter(i => i.kind === 'soft').map(i => `<span class="pto-chip soft">${escapeHtml(i.text)}</span>`).join('') || '<span class="small" style="color:#aaa">—</span>';
+      const prefer = items.filter(i => i.kind === 'prefer').map(i => `<span class="pto-chip prefer">${escapeHtml(i.text)}</span>`).join('') || '<span class="small" style="color:#aaa">—</span>';
+      const hols = weekHolidays(w).map(h=>h.name).join(', ');
+      return `<tr>
+        <td class="center">${w.block}</td>
+        <td><div style="font-weight:600">${fmtShort(w.mon)}</div>${hols ? `<div class="holiday-note">★ ${escapeHtml(hols)}</div>` : ''}<div class="small">${w.iso}</div></td>
+        <td>${hard}</td>
+        <td>${soft}</td>
+        <td>${prefer}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function exportPTOCsv() {
+  const weeks = weeksInPeriod();
+  const rows = [['Block','Week of','Faculty','Kind','Detail']];
+  weeks.forEach(w => {
+    const items = requestsForWeek(w);
+    items.forEach(i => {
+      rows.push([w.block, fmtISO(w.mon), i.init, i.kind, i.text]);
+    });
+  });
+  const csv = rows.map(r => r.map(c => {
+    const s = String(c ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `FMS_pto_overview_${state.period.startDate}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 /* ---------- Boot ---------- */
 function boot() {
   if (!loadLocal()) seedState();
@@ -1764,8 +2317,21 @@ function boot() {
   $$('header nav button').forEach(b => {
     b.addEventListener('click', () => activateTab(b.dataset.tab));
   });
+  // Password gate buttons
+  $('#btn-pw-go').addEventListener('click', tryPassword);
+  $('#pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryPassword(); });
+  // Cloud buttons
+  $('#btn-cloud-save-new').addEventListener('click', saveAsNewSchedule);
+  $('#btn-cloud-save-version').addEventListener('click', saveNewVersion);
+  $('#btn-cloud-refresh').addEventListener('click', renderCloudPanel);
+  // PTO overview buttons
+  $('#btn-pto-print').addEventListener('click', () => window.print());
+  $('#btn-pto-export-csv').addEventListener('click', exportPTOCsv);
   activateTab('faculty');
   saveLocal();
+  initSupabase();
+  // Password gate: show only if not already unlocked this session
+  if (!isUnlocked()) showPasswordGate();
 }
 boot();
 </script>
